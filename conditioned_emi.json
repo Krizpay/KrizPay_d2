@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
+contract CryptoToINRConversionEMI {
+
+    address public buyer;
+    address public seller;
+    uint256 public conversionRate; // Crypto to INR conversion rate
+    uint256 public totalAmountInINR;
+    uint256 public emiAmount;
+    uint256 public remainingEmiPayments;
+    uint256 public paidEmiAmount;
+    uint256 public emiDeadline;
+    
+    AggregatorV3Interface internal priceFeed;
+
+    enum State { Created, Locked, Released, Completed }
+    State public contractState;
+
+    constructor(address _seller, address _priceFeed) {
+        buyer = msg.sender;
+        seller = _seller;
+        priceFeed = AggregatorV3Interface(_priceFeed);
+        contractState = State.Created;
+    }
+
+    function getLatestPrice() public view returns (uint256) {
+        (,int price,,,) = priceFeed.latestRoundData();
+        return uint256(price * 10**10); // Convert price to wei
+    }
+
+    function convertCryptoToINR(uint256 cryptoAmount) public payable {
+        require(contractState == State.Created, "Conversion already done");
+        require(msg.sender == buyer, "Only buyer can convert");
+
+        uint256 cryptoToINRRate = getLatestPrice();
+        totalAmountInINR = cryptoAmount * cryptoToINRRate;
+
+        // Simulate transferring the crypto to seller
+        require(msg.value == cryptoAmount, "Incorrect crypto amount sent");
+
+        emiAmount = totalAmountInINR / 3;
+        remainingEmiPayments = 3;
+        emiDeadline = block.timestamp + 30 days; // First EMI due in 30 days
+
+        contractState = State.Locked;
+    }
+
+    function payEMI() public payable {
+        require(contractState == State.Locked, "EMI payments not active");
+        require(msg.sender == buyer, "Only buyer can pay EMI");
+        require(msg.value == emiAmount, "Incorrect EMI amount");
+        require(block.timestamp <= emiDeadline, "EMI deadline missed");
+
+        paidEmiAmount += msg.value;
+        remainingEmiPayments -= 1;
+
+        // Send the EMI payment to the seller
+        payable(seller).transfer(msg.value);
+
+        if (remainingEmiPayments == 0) {
+            contractState = State.Completed;
+        } else {
+            emiDeadline = block.timestamp + 30 days; // Set next EMI deadline
+        }
+    }
+
+    function withdrawCrypto() public {
+        require(contractState == State.Completed, "Contract is not completed");
+        require(msg.sender == seller, "Only seller can withdraw");
+        
+        // Seller withdraws the total amount in crypto
+        payable(seller).transfer(address(this).balance);
+    }
+}
