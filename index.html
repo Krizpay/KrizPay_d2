@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto to INR Conversion with EMI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        input[type="text"], input[type="number"], button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Crypto to INR Conversion with EMI</h2>
+        <div>
+            <label for="cryptoAmount">Crypto Amount:</label>
+            <input type="number" id="cryptoAmount" placeholder="Enter amount in crypto">
+        </div>
+        <button id="convertButton">Convert to INR and Setup EMI</button>
+
+        <h3>Pay EMI</h3>
+        <button id="payEmiButton" disabled>Pay Next EMI</button>
+        <div id="status"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+    <script>
+        let contractABI;
+        const contractAddress = '0xYourContractAddressHere'; // Replace with your contract address
+        let web3;
+        let contract;
+        let accounts;
+
+        async function loadContractABI() {
+            const response = await fetch('conditioned_emi.json');
+            contractABI = await response.json();
+        }
+
+        window.onload = async () => {
+            await loadContractABI();
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                await ethereum.request({ method: 'eth_requestAccounts' });
+                accounts = await web3.eth.getAccounts();
+                contract = new web3.eth.Contract(contractABI, contractAddress);
+                document.getElementById('status').innerText = 'Connected to Ethereum network';
+            } else {
+                alert('Please install MetaMask!');
+            }
+        };
+
+        document.getElementById('convertButton').onclick = async () => {
+            const cryptoAmount = document.getElementById('cryptoAmount').value;
+            if (!cryptoAmount) {
+                alert('Please enter a valid crypto amount.');
+                return;
+            }
+
+            try {
+                const convert = await contract.methods.convertCryptoToINR(web3.utils.toWei(cryptoAmount, 'ether')).send({ from: accounts[0], value: web3.utils.toWei(cryptoAmount, 'ether') });
+                document.getElementById('payEmiButton').disabled = false;
+                document.getElementById('status').innerText = 'Conversion successful! EMI setup complete.';
+            } catch (error) {
+                console.error(error);
+                document.getElementById('status').innerText = 'Conversion failed.';
+            }
+        };
+
+        document.getElementById('payEmiButton').onclick = async () => {
+            try {
+                // Replace 'EMI_AMOUNT_IN_ETH' with actual EMI amount you calculate from contract or predetermined value
+                const emiAmount = '0.01'; // Example: 0.01 ETH, replace with actual logic
+                const payEMI = await contract.methods.payEMI().send({ from: accounts[0], value: web3.utils.toWei(emiAmount, 'ether') });
+                document.getElementById('status').innerText = 'EMI payment successful!';
+            } catch (error) {
+                console.error(error);
+                document.getElementById('status').innerText = 'EMI payment failed.';
+            }
+        };
+    </script>
+</body>
+</html>
